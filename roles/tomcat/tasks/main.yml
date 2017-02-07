@@ -1,0 +1,60 @@
+- name: add group "tomcat"
+  group: name=tomcat
+  become: true
+
+- name: add user "tomcat"
+  user: name=tomcat group=tomcat home=/usr/share/tomcat createhome=no
+  become: true
+  become_method: sudo
+
+- name: Download Tomcat
+  get_url: url=http://www-us.apache.org/dist/tomcat/tomcat-8/v8.0.41/bin/apache-tomcat-8.0.41.tar.gz dest=/opt/apache-tomcat-8.0.41.tar.gz
+  become: true
+
+- name: Check if path exists
+  stat: path=/opt/apache-tomcat-8.0.41/
+  register: check_path
+
+- name: extract tomcat under /opt
+  unarchive: copy=no src="/opt/apache-tomcat-8.0.41.tar.gz" dest="/opt/"  
+  when: check_path.stat.exists == false
+  become: true
+
+- name: Symlink install directory
+  file: src=/opt/apache-tomcat-8.0.41 path=/opt/tomcat state=link
+  become: true
+
+- name: Change ownership of Tomcat installation
+  file: path=/opt/tomcat/ owner=tomcat group=tomcat state=directory recurse=yes
+  become: true
+
+- name: Configure Tomcat users
+  template: src=tomcat-users.xml dest=/opt/tomcat/conf/
+  notify: restart tomcat
+  become: true
+
+- name: Install Tomcat init script
+  copy: src=tomcat.service dest=/etc/systemd/system/tomcat.service mode=0755
+  become: true
+
+- name: reload systemd
+  command: systemctl daemon-reload
+  become: true
+
+- service:
+    name: tomcat
+    state: restarted
+  become: true
+
+- name: insert firewalld rule for tomcat http port
+  firewalld: port={{ http_port }}/tcp permanent=true state=enabled immediate=yes
+  when: "ansible_os_family == 'RedHat' and ansible_distribution_major_version == '7'"
+  become: true
+
+- name: insert firewalld rule for tomcat https port
+  firewalld: port={{ https_port }}/tcp permanent=true state=enabled immediate=yes
+  when: "ansible_os_family == 'RedHat' and ansible_distribution_major_version == '7'"
+  become: true
+
+- name: wait for tomcat to start
+  wait_for: port={{http_port}}

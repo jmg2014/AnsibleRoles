@@ -1,0 +1,8 @@
+---
+- hosts: webservers
+  remote_user: ansible
+  roles:
+     - common
+     - openjdk	
+     - tomcat
+
